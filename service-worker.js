@@ -1,3 +1,5 @@
+// icon by turkkub
+
 self.addEventListener("install", e => {
   e.waitUntil(
     caches.open("paises-cache").then(cache => {
