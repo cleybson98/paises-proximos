@@ -1,135 +1,195 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
-  <meta charset="UTF-8" />
-  <title>Países mais próximos</title>
-  <link rel="manifest" href="manifest.json" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#2c3e50" />
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background:#f9f9f9; color:#333; }
-    h1 { color:#2c3e50; text-align:center; margin-bottom:20px; }
-    #status { text-align:center; margin-bottom:15px; font-size:1rem; }
-    ul { list-style:none; padding:0; margin:0 auto; max-width:600px; }
-    li { margin:10px 0; padding:12px; background:#fff; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1);
-         display:flex; align-items:center; justify-content:flex-start; transition:transform .2s; }
-    li:hover { transform:scale(1.02); }
-    img { width:40px; height:auto; margin-right:12px; border-radius:4px; flex-shrink:0; }
-    @media (max-width:768px) {
-      body { padding:15px; }
-      li { font-size:.95rem; padding:10px; }
-      img { width:32px; }
-    }
-    @media (max-width:480px) {
-      h1 { font-size:1.4rem; }
-      #status { font-size:.9rem; }
-      li { flex-direction:column; align-items:flex-start; }
-      img { margin:0 0 8px 0; width:50px; }
-    }
-  </style>
-</head>
-<body>
-  <h1>🌍 Países mais próximos de você</h1>
-  <p id="status">Obtendo sua localização...</p>
-  <ul id="countries"></ul>
-
-  <script>
-    // Haversine
-    function haversine(lat1, lon1, lat2, lon2) {
-      const R = 6371;
-      const toRad = x => x * Math.PI / 180;
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
-    }
-
-    async function fetchCountries() {
-      const url = "https://restcountries.com/v3.1/all";
-      const res = await fetch(url);
-      // Verifica status HTTP
-      if (!res.ok) {
-        // Tenta ler o corpo para debugar
-        let bodyText;
-        try { bodyText = await res.text(); } catch(e) { bodyText = "<no body>"; }
-        throw new Error(`REST Countries API retornou ${res.status}. Resposta: ${bodyText}`);
-      }
-      const data = await res.json();
-      console.log("Resposta bruta da REST Countries API:", data);
-
-      // Normaliza para um array:
-      if (Array.isArray(data)) return data;
-      if (data && Array.isArray(data.data)) return data.data; // caso venha embrulhado
-      // Tenta extrair valores que pareçam países
-      if (data && typeof data === "object") {
-        const values = Object.values(data).filter(v => v && typeof v === "object" && (v.name || v.name?.common || v.cca2));
-        if (values.length) return values;
-      }
-      throw new Error("Formato de resposta inesperado da REST Countries API (não é array). Veja console para detalhes.");
-    }
-
-    async function main(lat, lon) {
-      const statusEl = document.getElementById("status");
-      try {
-        statusEl.textContent = `Sua localização: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-        const countries = await fetchCountries();
-
-        // Mapeia com segurança (ignora itens sem latlng)
-        const distances = countries
-          .map(c => {
-            // latlng pode estar em c.latlng ou c.capitalInfo?.latlng dependendo do país
-            const latlng = c.latlng || (c.capitalInfo && c.capitalInfo.latlng) || null;
-            if (!latlng || !Array.isArray(latlng) || latlng.length < 2) return null;
-            const [clat, clon] = latlng;
-            const name = c.name?.common || c.name?.official || c.cca2 || "Nome desconhecido";
-            const flag = c.flags?.png || c.flags?.svg || "";
-            return { name, flag, distance: haversine(lat, lon, clat, clon) };
-          })
-          .filter(Boolean);
-
-        // Ordena e exibe
-        distances.sort((a,b) => a.distance - b.distance);
-        const list = document.getElementById("countries");
-        list.innerHTML = "";
-        distances.slice(0, 20).forEach(c => {
-          const li = document.createElement("li");
-          const km = Math.round(c.distance);
-          li.innerHTML = `<img src="${c.flag}" alt="flag"> <div><strong>${c.name}</strong><br><small>${km} km</small></div>`;
-          list.appendChild(li);
-        });
-
-        if (!distances.length) {
-          statusEl.textContent = "Nenhum país com coordenadas encontrado na resposta da API.";
+    <meta charset="UTF-8" />
+    <title>Países mais próximos</title>
+    <link rel="manifest" href="manifest.json" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2c3e50" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f9f9f9;
+            color: #333;
         }
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = "Erro: " + err.message;
-      }
-    }
 
-    // Geolocation
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        pos => main(pos.coords.latitude, pos.coords.longitude),
-        err => {
-          console.error("Erro geolocation:", err);
-          const statusEl = document.getElementById("status");
-          if (err.code === 1) statusEl.textContent = "Permissão negada para localização.";
-          else statusEl.textContent = "Não foi possível obter sua localização.";
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
-    } else {
-      document.getElementById("status").textContent = "Geolocalização não suportada no seu navegador.";
-    }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 20px;
+        }
 
-    // Registrar service worker para PWA (opcional)
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("service-worker.js").catch(e => console.warn("SW register falhou:", e));
-    }
-  </script>
+        #status {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 1rem;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0 auto;
+            max-width: 600px;
+        }
+
+        li {
+            margin: 10px 0;
+            padding: 12px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            transition: transform .2s;
+        }
+
+        li:hover {
+            transform: scale(1.02);
+        }
+
+        img {
+            width: 40px;
+            height: auto;
+            margin-right: 12px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        @media (max-width:768px) {
+            body {
+                padding: 15px;
+            }
+
+            li {
+                font-size: .95rem;
+                padding: 10px;
+            }
+
+            img {
+                width: 32px;
+            }
+        }
+
+        @media (max-width:480px) {
+            h1 {
+                font-size: 1.4rem;
+            }
+
+            #status {
+                font-size: .9rem;
+            }
+
+            li {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            img {
+                margin: 0 0 8px 0;
+                width: 50px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🌍 Países mais próximos de você</h1>
+    <p id="status">Obtendo sua localização...</p>
+    <ul id="countries"></ul>
+
+    <script>
+        // Haversine
+        function haversine(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const toRad = x => x * Math.PI / 180;
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        async function fetchCountries() {
+            const url = "https://restcountries.com/v3.1/all?fields=name,latlng,flags";
+            const res = await fetch(url);
+            if (!res.ok) {
+                let bodyText;
+                try { bodyText = await res.text(); } catch (e) { bodyText = "<no body>"; }
+                throw new Error(`REST Countries API retornou ${res.status}. Resposta: ${bodyText}`);
+            }
+            const data = await res.json();
+            console.log("Resposta bruta da REST Countries API:", data);
+
+            if (Array.isArray(data)) return data;
+            throw new Error("Formato inesperado da API.");
+        }
+
+        async function main(lat, lon) {
+            const statusEl = document.getElementById("status");
+            try {
+                statusEl.textContent = `Sua localização: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+                const countries = await fetchCountries();
+
+                // Mapeia com segurança (ignora itens sem latlng)
+                const distances = countries
+                    .map(c => {
+                        // latlng pode estar em c.latlng ou c.capitalInfo?.latlng dependendo do país
+                        const latlng = c.latlng || (c.capitalInfo && c.capitalInfo.latlng) || null;
+                        if (!latlng || !Array.isArray(latlng) || latlng.length < 2) return null;
+                        const [clat, clon] = latlng;
+                        const name = c.name?.common || c.name?.official || c.cca2 || "Nome desconhecido";
+                        const flag = c.flags?.png || c.flags?.svg || "";
+                        return { name, flag, distance: haversine(lat, lon, clat, clon) };
+                    })
+                    .filter(Boolean);
+
+                // Ordena e exibe
+                distances.sort((a, b) => a.distance - b.distance);
+                const list = document.getElementById("countries");
+                list.innerHTML = "";
+                distances.slice(0, 20).forEach(c => {
+                    const li = document.createElement("li");
+                    const km = Math.round(c.distance);
+                    li.innerHTML = `<img src="${c.flag}" alt="flag"> <div><strong>${c.name}</strong><br><small>${km} km</small></div>`;
+                    list.appendChild(li);
+                });
+
+                if (!distances.length) {
+                    statusEl.textContent = "Nenhum país com coordenadas encontrado na resposta da API.";
+                }
+            } catch (err) {
+                console.error(err);
+                statusEl.textContent = "Erro: " + err.message;
+            }
+        }
+
+        // Geolocation
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                pos => main(pos.coords.latitude, pos.coords.longitude),
+                err => {
+                    console.error("Erro geolocation:", err);
+                    const statusEl = document.getElementById("status");
+                    if (err.code === 1) statusEl.textContent = "Permissão negada para localização.";
+                    else statusEl.textContent = "Não foi possível obter sua localização.";
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        } else {
+            document.getElementById("status").textContent = "Geolocalização não suportada no seu navegador.";
+        }
+
+        // Registrar service worker para PWA (opcional)
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("service-worker.js").catch(e => console.warn("SW register falhou:", e));
+        }
+    </script>
 </body>
+
 </html>
