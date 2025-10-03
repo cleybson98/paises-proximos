@@ -97,12 +97,11 @@
 </head>
 
 <body>
-    <h1>🌍 Países mais próximos de você</h1>
+    <h1>Países mais próximos de você</h1>
     <p id="status">Obtendo sua localização...</p>
     <ul id="countries"></ul>
 
     <script>
-        // Haversine
         function haversine(lat1, lon1, lat2, lon2) {
             const R = 6371;
             const toRad = x => x * Math.PI / 180;
@@ -136,10 +135,8 @@
                 statusEl.textContent = `Sua localização: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
                 const countries = await fetchCountries();
 
-                // Mapeia com segurança (ignora itens sem latlng)
                 const distances = countries
                     .map(c => {
-                        // latlng pode estar em c.latlng ou c.capitalInfo?.latlng dependendo do país
                         const latlng = c.latlng || (c.capitalInfo && c.capitalInfo.latlng) || null;
                         if (!latlng || !Array.isArray(latlng) || latlng.length < 2) return null;
                         const [clat, clon] = latlng;
@@ -149,7 +146,6 @@
                     })
                     .filter(Boolean);
 
-                // Ordena e exibe
                 distances.sort((a, b) => a.distance - b.distance);
                 const list = document.getElementById("countries");
                 list.innerHTML = "";
@@ -169,12 +165,10 @@
             }
         }
 
-        // Geolocation
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(
                 pos => main(pos.coords.latitude, pos.coords.longitude),
                 err => {
-                    console.error("Erro geolocation:", err);
                     const statusEl = document.getElementById("status");
                     if (err.code === 1) statusEl.textContent = "Permissão negada para localização.";
                     else statusEl.textContent = "Não foi possível obter sua localização.";
@@ -185,7 +179,6 @@
             document.getElementById("status").textContent = "Geolocalização não suportada no seu navegador.";
         }
 
-        // Registrar service worker para PWA (opcional)
         if ("serviceWorker" in navigator) {
             navigator.serviceWorker.register("service-worker.js").catch(e => console.warn("SW register falhou:", e));
         }
